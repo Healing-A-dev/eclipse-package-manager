@@ -1,0 +1,386 @@
+#!/usr/bin/env lua
+-- Eclipse Package Manager (EPM) for arch linux
+-- Pacman wrapper (FOR NOW)
+local version = "1.0.0"
+
+local Colors = {
+	Purple = "\027[95m",
+	Red = "\027[31m",
+	Green = "\027[32m",
+	Bold = "\027[1m",
+	Clear = "\027[0m"
+}
+
+local Commands = {
+	["add-pkg"] = "DONE",
+	["remove-pkg"] = "DONE",
+	["remove-pkgdep"] = "DONE",
+	list = "DONE",
+	search = "DONE",
+	version = nil,
+	reinstall = nil,
+	update = "DONE",
+	REQUIRES_SUDO = {
+		["add-pkg"] = true,
+		["remove-pkg"] = true,
+		update = true,
+		reinstall = true,
+		["remove-pkgdep"] = true,
+		list = false,
+		search = false,
+		version = false,
+	}
+}
+
+local FLAGS = {
+	slient = false,
+	verbose = false,
+	no_confirm = false,
+	ecli_systen_update = false,
+}
+
+
+-- Function to use lua "regex" safely --
+local function cleanSearch(str)
+	if str:match("[%(%)%.%+%-%*%?%[%]%^%$%%]") then
+		local replace = str:match("[%(%)%.%+%-%*%?%[%]%^%$%%]")
+		str = str:gsub("[%(%)%.%+%-%*%?%[%]%^%$%%]", "%%"..replace)
+	end
+	return str
+end
+
+
+
+-- Search for Packages --
+function Commands.search(pkgs)
+	os.execute("pacman -F "..table.concat(pkgs," "))
+	os.exit()
+end
+
+
+
+-- Install Packages --
+Commands["add-pkg"] = function(pkgs)
+	local pkgs, pkgs_names, response = pkgs, "", nil
+	if FLAGS.ecli_system_update then
+		FLAGS.no_confirm = FLAGS.ecli_system_update
+	end
+	if not FLAGS.ecli_system_update then
+		print(Colors.Bold.."Searching for package(s): ["..Colors.Purple..table.concat(pkgs,", ")..Colors.Clear..Colors.Bold.."]"..Colors.Clear)
+	
+		-- Searching for package(s)
+		for iter = 1, #pkgs do
+			local b = io.popen("pacman -F "..pkgs[iter])
+			local s = b:read("*a")
+			b:close()
+			if s == "" then
+				print("epm: package: <"..pkgs[iter].."> not found")
+				os.exit(1)
+			end
+			local match = s:match("%/"..cleanSearch(pkgs[iter]))
+			if iter < #pkgs then
+				pkgs_names = pkgs_names..Colors.Purple.." - "..match:gsub("%/","").."\n"
+			else
+				pkgs_names = pkgs_names..Colors.Purple.." - "..match:gsub("%/","")
+			end
+		end
+	
+		-- Confirmation & Install
+		print(Colors.Bold.."Install the following package(s)? [Y/n]:"..Colors.Clear)
+		print(Colors.Purple..pkgs_names..Colors.Clear)
+	end
+	
+	-- No confirm
+	if FLAGS.no_confirm then
+		response = "y"
+	else
+		response = io.read():lower()
+	end
+	
+	if response == ("y" or "yes") then
+		for s = 1, #pkgs do
+			print("Installing: "..pkgs[s])
+
+			-- Verbose
+			if not FLAGS.verbose then
+				os.execute("pacman -S -q --noconfirm --noprogressbar "..pkgs[s])
+			else
+				os.execute("pacman -S --noconfirm "..pkgs[s])
+			end
+		end
+	else
+		os.exit()
+	end
+
+	-- Completion message
+	if not FLAGS.ecli_system_update then
+		print(Colors.Bold.."Successfully installed package(s): ["..Colors.Purple..table.concat(pkgs,", ")..Colors.Clear..Colors.Bold.."]"..Colors.Clear)
+	end
+end	
+
+
+
+-- List Installed Packages --
+function Commands.list(ret)
+	local ret = ret
+	if type(ret) ~= "boolean" then
+		ret = false
+	end
+	local b = io.popen("pacman -Q"):read("*a")
+	if ret == false then
+		print(b)
+		os.exit()
+	end
+	return b
+end
+
+
+
+-- Uninstall Packages --
+Commands["remove-pkg"] = function(pkgs)
+	local pkgs, pkgs_names, response = pkgs, "", nil
+	local b = Commands.list(true)
+
+	-- Checking if package is installed
+	for iter = 1, #pkgs do
+		local match = b:match(cleanSearch(pkgs[iter]))
+		if match == nil then
+			print("epm: package: <"..pkgs[iter].."> not found")
+			os.exit(1)
+		end
+		if iter < #pkgs then
+			pkgs_names = pkgs_names..Colors.Purple.." - "..match:gsub("%/","").."\n"
+		else
+			pkgs_names = pkgs_names..Colors.Purple.." - "..match:gsub("%/","")
+		end
+	end
+
+	-- Confirmation & Deletion
+	print(Colors.Bold.."Uninstall the following package(s)? [Y/n]:"..Colors.Clear)
+	print(Colors.Purple..pkgs_names..Colors.Clear)
+
+	-- No confirm
+	if FLAGS.no_confirm then
+		response = "y"
+	else
+		response = io.read():lower()
+	end
+	
+	if response == ("y" or "yes") then
+		for s = 1, #pkgs do
+			print("Uninstalling: "..pkgs[s])
+
+			-- Verbose
+			if not FLAGS.verbose then
+				os.execute("pacman -R -q --noconfirm --noprogressbar "..pkgs[s])
+			else
+				os.execute("pacman -R --noconfirm "..pkgs[s])
+			end
+		end
+	else
+		os.exit()
+	end
+
+	-- Completion message
+	print(Colors.Bold.."Successfully uninstalled package(s): ["..Colors.Purple..table.concat(pkgs,", ")..Colors.Clear..Colors.Bold.."]"..Colors.Clear)
+end
+
+
+
+-- Uninstall Packages & Unneeded Dependencies --
+Commands["remove-pkgdep"] = function(pkgs)
+	local pkgs, pkgs_names, response = pkgs, "", nil
+	local b = Commands.list(true)
+
+	-- Checking if package is installed
+	for iter = 1, #pkgs do
+		local match = b:match(cleanSearch(pkgs[iter]))
+		if match == nil then
+			print("epm: package: <"..pkgs[iter].."> not found")
+			os.exit(1)	
+		end
+		if iter < #pkgs then
+			pkgs_names = pkgs_names..Colors.Purple.." - "..match:gsub("%/","").."\n"
+		else
+			pkgs_names = pkgs_names..Colors.Purple.." - "..match:gsub("%/","")
+		end
+	end
+
+	-- Confirmation & Deletion
+	print(Colors.Bold.."Uninstall the following package(s) along with unused dependencies? [Y/n]:"..Colors.Clear)
+	print(Colors.Purple..pkgs_names..Colors.Clear)
+
+	-- No confirm
+	if FLAGS.no_confirm then
+		response = "y"
+	else
+		response = io.read():lower()
+	end
+	
+	if response == ("y" or "yes") then
+		for s = 1, #pkgs do
+			print("Uninstalling: "..pkgs[s])
+
+			-- Verbose
+			if not FLAGS.verbose then
+				os.execute("pacman -Rs --noconfirm --noprogressbar "..pkgs[s])
+			else
+				os.execute("pacman -Rs --noconfirm "..pkgs[s])
+			end
+		end
+	else
+		os.exit()
+	end
+
+	-- Completion message
+	print(Colors.Bold.."Successfully uninstalled package(s): ["..Colors.Purple..table.concat(pkgs,", ")..Colors.Clear..Colors.Bold.."]"..Colors.Clear)
+end
+
+
+
+-- System/Package Updates --
+function Commands.update()
+	local pkgs, pkgs_names, response = {}, {}, ""
+
+	-- Syncing databases
+	local _ = io.popen("pacman -Sy")
+	_ = io.popen("pacman -Fy")
+	_:close()
+
+	-- Collect packages that need updating
+	local b = io.popen("pacman -Qu")
+	local lines = b:lines()
+
+	for line in lines do
+		local counter, pkg_name, old_version, new_version = 0, "", "", ""
+		for s in line:gmatch("%S+") do
+			counter = counter + 1
+			if counter == 1 then
+				pkg_name = s
+				pkgs_names[#pkgs_names+1] = pkg_name
+			elseif counter == 2 then
+				old_version = s
+			elseif counter == 4 then
+				new_version = s
+			end
+		end
+		pkgs[#pkgs+1] = {
+			Name = pkg_name,
+			Old = old_version,
+			New = new_version
+		}
+	end
+	b:close()
+
+	if #pkgs == 0 then
+		print(Colors.Bold.."Nothing to do. System is up to date!"..Colors.Clear)
+		os.exit()
+	end
+
+	-- Confirmation & Update
+	print(Colors.Bold.."Updates have been found for the following package(s): ")
+	for _,package in pairs(pkgs) do
+		print(Colors.Purple.." - "..package.Name..Colors.Clear.." ["..Colors.Red..package.Old..Colors.Clear.." |> "..Colors.Green..package.New..Colors.Clear.."]")
+	end
+	io.write(Colors.Bold.."Proceed with update(s)? [Y/n]: ")
+	response = io.read():lower()
+	if response == "y" or response == "yes" then
+		FLAGS.ecli_system_update = true
+		Commands["add-pkg"](pkgs_names)
+	else
+		os.exit()
+	end
+
+	-- Completion message
+	print(Colors.Bold.."Update Completed. System is now up to date!"..Colors.Clear)
+end
+
+
+
+-- Reinstall Packages --
+function Commands.reinstall()
+	print("WORKING ON IT")
+	os.exit()
+end
+
+
+-- Display Current Version --
+function Commands.version()
+	print(version)
+	os.exit()
+end
+
+
+
+-- Help Command --
+local function displayHelpMessage()
+	print(Colors.Purple..[[Eclipse Package Manager (EPM):]]..Colors.Clear..[[ 
+usage: epm <arguments> <commands>
+Commands:
+    add-pkg <package(s)>              |> Install package(s)
+    remove-pkg <package(s)>           |> Remove package(s)
+    remove-pkgdep <package(s)>        |> Remove package(s) along with unused dependencies
+    reinstall-pkg <package(s)>        |> Reinstall package(s)
+    info-pkg <package>                |> List information about a package
+    search <package>                  |> Search for a package
+    list                              |> List all installed packages on the system
+    update                            |> Perform a system update
+    version                           |> Display the current version
+    
+Arguemnts:
+    -h --help          |> Displays this message
+    -q --quiet         |> TBD
+    -y --no-confirm    |> Automatucally install/uninstall packages with being prompted
+    -V --version       |> Display the current version
+	]])
+	os.exit()
+end
+
+
+
+-- Main Function --
+function ecli()
+	local running_as_root = io.popen("whoami"):read():match("root") and #io.popen("whoami"):read() == 4
+	for iter = 1, #arg do
+		local command = arg[iter]
+		if command:match("^%-") or command:match("^%-%-") then
+			if command == "-q" or command == "--quiet" then
+				FLAGS.silent = true
+			elseif command == "-v" or command == "--verbose" then
+				FLAGS.verbose = true
+			elseif command == "-y" or command == "--no-confirm" then
+				FLAGS.no_confirm = true
+			elseif command == "-V" or command == "--version" then
+				command = "version"
+				Commands[command]()
+			elseif command == "-h" or command == "--help" then
+				displayHelpMessage()
+			else
+				print("epm: error: invalid argument <"..command..">")
+				os.exit(1)
+			end
+			table.remove(arg,iter)
+		end
+	end
+	
+	for iter = 1, #arg do
+		local command = arg[iter]
+		if Commands[command] ~= nil then
+			if Commands.REQUIRES_SUDO[command] and not running_as_root then
+				print("epm: command <"..command.."> can only be ran as root")
+				os.exit(1)
+			end
+			table.remove(arg,iter)
+			Commands[command](arg)
+			os.exit()
+		else
+			print("epm: invalid command <"..command..">")
+			os.exit(1)
+		end
+	end
+	if arg[1] == nil then
+		print("epm: error: no command specified (use -h or --help for help)")
+	end
+end
+
+ecli()
