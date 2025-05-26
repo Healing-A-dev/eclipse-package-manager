@@ -17,18 +17,20 @@ local Commands = {
 	["remove-pkgdep"] = "DONE",
 	list = "DONE",
 	search = "DONE",
-	version = nil,
-	reinstall = nil,
+	version = "DONE",
+	["info-pkg"] = nil,
+	["reinstall-pkg"] = nil,
 	update = "DONE",
 	REQUIRES_SUDO = {
 		["add-pkg"] = true,
 		["remove-pkg"] = true,
 		update = true,
-		reinstall = true,
+		["reinstall-pkg"] = true,
 		["remove-pkgdep"] = true,
 		list = false,
 		search = false,
 		version = false,
+		["info-pkg"] = false
 	}
 }
 
@@ -298,10 +300,11 @@ end
 
 
 -- Reinstall Packages --
-function Commands.reinstall()
+Commands["reinstall-pkg"] = function(pkgs)
 	print("WORKING ON IT")
 	os.exit()
 end
+
 
 
 -- Display Current Version --
@@ -310,6 +313,24 @@ function Commands.version()
 	os.exit()
 end
 
+
+
+-- Display Information of an Installed Package --
+Commands["info-pkg"] = function(pkgs)
+	local pkgs, info = pkgs, ""
+	local b = Commands.list(true)
+	for iter = 1, #pkgs do
+		local pkg = cleanSearch(pkgs[iter])
+		if b:match(pkg) == nil then
+			print("epm: package: <"..pkgs[iter].."> not found")
+			os.exit(1)
+		end
+		local s = io.popen("pacman -Qi "..pkgs[iter])
+		info = info..s:read("*a")
+		s:close()
+	end
+	print(info)
+end
 
 
 -- Help Command --
