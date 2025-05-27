@@ -18,7 +18,7 @@ local Commands = {
 	list = "DONE",
 	search = "DONE",
 	version = "DONE",
-	["info-pkg"] = "DONE",
+	["info-pkg"] = nil,
 	["reinstall-pkg"] = nil,
 	update = "DONE",
 	REQUIRES_SUDO = {
@@ -101,11 +101,11 @@ Commands["add-pkg"] = function(pkgs)
 	
 	if response == ("y" or "yes") then
 		for s = 1, #pkgs do
-			print("Installing: "..pkgs[s])
+			print("Installing package: "..Colors.Purple..pkgs[s]..Colors.Clear)
 
 			-- Verbose
 			if not FLAGS.verbose then
-				os.execute("pacman -S -q --noconfirm --noprogressbar "..pkgs[s])
+				os.execute("pacman -S -q --noconfirm --noprogressbar "..pkgs[s].." &>/dev/null")
 			else
 				os.execute("pacman -S --noconfirm "..pkgs[s])
 			end
@@ -170,11 +170,11 @@ Commands["remove-pkg"] = function(pkgs)
 	
 	if response == ("y" or "yes") then
 		for s = 1, #pkgs do
-			print("Uninstalling: "..pkgs[s])
+			print("Uninstalling package: "..Colors.Purple..pkgs[s]..Colors.Clear)
 
 			-- Verbose
 			if not FLAGS.verbose then
-				os.execute("pacman -R -q --noconfirm --noprogressbar "..pkgs[s])
+				os.execute("pacman -R --noconfirm --noprogressbar "..pkgs[s].." &>/dev/null")
 			else
 				os.execute("pacman -R --noconfirm "..pkgs[s])
 			end
@@ -193,6 +193,7 @@ end
 Commands["remove-pkgdep"] = function(pkgs)
 	local pkgs, pkgs_names, response = pkgs, "", nil
 	local b = Commands.list(true)
+	local o = nil
 
 	-- Checking if package is installed
 	for iter = 1, #pkgs do
@@ -225,7 +226,7 @@ Commands["remove-pkgdep"] = function(pkgs)
 
 			-- Verbose
 			if not FLAGS.verbose then
-				os.execute("pacman -Rs --noconfirm --noprogressbar "..pkgs[s])
+				os.execute("pacman -Rs --noconfirm --noprogressbar "..pkgs[s].." &>/dev/null")
 			else
 				os.execute("pacman -Rs --noconfirm "..pkgs[s])
 			end
@@ -279,11 +280,11 @@ function Commands.update()
 	end
 
 	-- Confirmation & Update
-	print(Colors.Bold.."Updates have been found for the following package(s): ")
+	print(Colors.Bold.."Updates have been found for the following package(s): "..Colors.Clear)
 	for _,package in pairs(pkgs) do
 		print(Colors.Purple.." - "..package.Name..Colors.Clear.." ["..Colors.Red..package.Old..Colors.Clear.." |> "..Colors.Green..package.New..Colors.Clear.."]")
 	end
-	io.write(Colors.Bold.."Proceed with update(s)? [Y/n]: ")
+	io.write(Colors.Bold.."Proceed with update(s)? [Y/n]: "..Colors.Clear)
 	response = io.read():lower()
 	if response == "y" or response == "yes" then
 		FLAGS.ecli_system_update = true
@@ -403,4 +404,6 @@ function ecli()
 	end
 end
 
+
+-- Runs the main function
 ecli()
