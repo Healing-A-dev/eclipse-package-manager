@@ -245,8 +245,8 @@ function Commands.update()
 	local pkgs, pkgs_names, response = {}, {}, ""
 
 	-- Syncing databases
-	local _ = io.popen("pacman -Sy")
-	_ = io.popen("pacman -Fy")
+	local _ = os.execute("pacman -Sy")
+	_ = os.execute("pacman -Fy")
 	_:close()
 
 	-- Collect packages that need updating
