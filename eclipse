@@ -247,7 +247,6 @@ function Commands.update()
 	-- Syncing databases
 	local _ = os.execute("pacman -Sy")
 	_ = os.execute("pacman -Fy")
-	_:close()
 
 	-- Collect packages that need updating
 	local b = io.popen("pacman -Qu")
